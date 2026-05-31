@@ -10,111 +10,150 @@ const config = {
 
 const client = new line.Client(config);
 
-// 暫時先用記憶體紀錄，之後再接 Google Sheet
-const userRecords = {};
+const FAMILY_USER_ID = process.env.FAMILY_USER_ID;
+
+// 暫時用記憶體儲存，之後可升級 Google Sheet / Firebase
+const users = {};
 
 app.post("/webhook", line.middleware(config), async (req, res) => {
   try {
-    const events = req.body.events;
-
-    for (const event of events) {
+    for (const event of req.body.events) {
       if (event.type !== "message") continue;
       if (event.message.type !== "text") continue;
 
       const userId = event.source.userId;
       const text = event.message.text.trim();
 
-      if (!userRecords[userId]) {
-        userRecords[userId] = {
-          lastMedicineTime: null
+      if (!users[userId]) {
+        users[userId] = {
+          step: null,
+          profile: {}
         };
       }
 
+      let user = users[userId];
       let replyText = "";
 
-      if (text === "我已吃藥") {
-        const now = new Date();
-        userRecords[userId].lastMedicineTime = now;
+      if (text === "我是家屬") {
+        replyText =
+          "這是你的家屬 LINE userId：\n\n" +
+          userId +
+          "\n\n請貼到 Render 的 FAMILY_USER_ID。";
+      }
+
+      else if (text === "開始設定" || text === "基本資料") {
+        user.step = "name";
+        replyText = "請輸入長輩姓名：";
+      }
+
+      else if (user.step === "name") {
+        user.profile.name = text;
+        user.step = "age";
+        replyText = "請輸入年齡：";
+      }
+
+      else if (user.step === "age") {
+        user.profile.age = text;
+        user.step = "disease";
+        replyText = "請輸入是否有疾病：\n例如：高血壓、糖尿病\n如果沒有請輸入：無";
+      }
+
+      else if (user.step === "disease") {
+        user.profile.disease = text;
+        user.step = "medicine";
+        replyText = "請輸入目前服用藥物：\n如果沒有請輸入：無";
+      }
+
+      else if (user.step === "medicine") {
+        user.profile.medicine = text;
+        user.step = "familyPhone";
+        replyText = "請輸入家屬電話：";
+      }
+
+      else if (user.step === "familyPhone") {
+        user.profile.familyPhone = text;
+        user.step = null;
 
         replyText =
-          "✅ 已記錄您吃藥了\n" +
-          "時間：" + now.toLocaleString("zh-TW", { timeZone: "Asia/Taipei" });
-      } else if (text === "今天提醒") {
+          "✅ 基本資料設定完成\n\n" +
+          "姓名：" + user.profile.name + "\n" +
+          "年齡：" + user.profile.age + "\n" +
+          "疾病：" + user.profile.disease + "\n" +
+          "藥物：" + user.profile.medicine + "\n" +
+          "家屬電話：" + user.profile.familyPhone;
+      }
+
+      else if (text === "查看資料") {
+        replyText = getProfileText(user.profile);
+      }
+
+      else if (text === "我已吃藥") {
+        const now = new Date().toLocaleString("zh-TW", {
+          timeZone: "Asia/Taipei"
+        });
+
+        replyText = "✅ 已記錄您吃藥了\n時間：" + now;
+      }
+
+      else if (text === "今日提醒" || text === "今天提醒") {
         replyText =
-          "📅 今天提醒\n\n" +
-          "💊 早上 08:00 吃早餐藥\n" +
-          "💊 中午 12:00 吃午餐藥\n" +
-          "💊 晚上 18:00 吃晚餐藥\n\n" +
-          "吃完請按「我已吃藥」。";
-      } else if (text === "防詐幫忙") {
+          "📅 今日提醒\n\n" +
+          "💊 早上 08:00 吃藥\n" +
+          "💊 中午 12:00 吃藥\n" +
+          "💊 晚上 18:00 吃藥";
+      }
+
+      else if (text === "防詐騙" || text === "防詐幫忙") {
         replyText =
           "🛡️ 防詐提醒\n\n" +
-          "如果有人要求你：\n" +
-          "1. 匯款\n" +
-          "2. 提供密碼\n" +
-          "3. 操作 ATM\n" +
-          "4. 點不明連結\n\n" +
-          "請先不要做，先聯絡家人確認。";
-      } else if (text === "我要叫車") {
+          "陌生來電要求匯款、提供密碼、操作 ATM，請先不要做，先問家人。";
+      }
+
+      else if (text === "我要叫車") {
         replyText =
-          "🚕 已收到叫車需求\n\n" +
-          "請先確認：\n" +
-          "1. 目前位置\n" +
-          "2. 要去的地方\n\n" +
-          "之後可以加入通知家人或叫車連結。";
-      } else if (text === "聯絡家人") {
+          "🚕 叫車資訊\n\n" +
+          "台灣大車隊：55688\n" +
+          "大都會車隊：55178";
+      }
+
+      else if (text === "聯絡家人") {
+        replyText = "👨‍👩‍👧 已通知家人，請稍候。";
+
+        await notifyFamily(
+          "👨‍👩‍👧 長輩想聯絡家人\n\n" +
+          getProfileText(user.profile)
+        );
+      }
+
+      else if (text === "緊急求助") {
         replyText =
-          "👨‍👩‍👧 已收到聯絡家人的需求\n\n" +
-          "目前測試版先回覆確認。\n" +
-          "下一版會直接推播通知家人。";
-      } else if (text === "緊急求助") {
-        replyText =
-          "🆘 緊急求助已送出\n\n" +
+          "🆘 緊急求助已送出！\n\n" +
           "請保持手機暢通，家人會盡快聯絡您。";
-      } else {
+
+        await notifyFamily(
+          "🚨 緊急求助通知！\n\n" +
+          "長輩按下了「緊急求助」。\n\n" +
+          getProfileText(user.profile)
+        );
+      }
+
+      else {
         replyText =
-          "請點選下方功能：\n\n" +
+          "請點選功能選單：\n\n" +
+          "📝 開始設定\n" +
+          "👤 查看資料\n" +
           "💊 我已吃藥\n" +
-          "📅 今天提醒\n" +
-          "🛡️ 防詐幫忙\n" +
+          "📅 今日提醒\n" +
+          "🛡️ 防詐騙\n" +
           "🚕 我要叫車\n" +
           "👨‍👩‍👧 聯絡家人\n" +
           "🆘 緊急求助";
       }
-let replyText = "";
 
-if (userText === "我已吃藥") {
-  replyText = "✅ 已記錄您今天的服藥時間";
-}
-
-else if (userText === "今日提醒") {
-  replyText = "📅 今天提醒：\n1. 早上吃藥\n2. 下午散步30分鐘";
-}
-
-else if (userText === "防詐騙") {
-  replyText = "🛡️ 防詐騙提醒：\n陌生來電要求匯款請立即掛斷。";
-}
-
-else if (userText === "我要叫車") {
-  replyText = "🚕 可撥打 55688 台灣大車隊";
-}
-
-else if (userText === "聯絡家人") {
-  replyText = "👨‍👩‍👧 已通知家人與您聯絡";
-}
-
-else if (userText === "緊急求助") {
-  replyText = "🚨 緊急求助已送出，請稍候。";
-}
-
-else {
-  replyText = "收到：" + userText;
-}
-
-await client.replyMessage(event.replyToken, {
-  type: "text",
-  text: replyText
-});
+      await client.replyMessage(event.replyToken, {
+        type: "text",
+        text: replyText
+      });
     }
 
     res.sendStatus(200);
@@ -123,6 +162,30 @@ await client.replyMessage(event.replyToken, {
     res.sendStatus(500);
   }
 });
+
+function getProfileText(profile) {
+  if (!profile.name) {
+    return "尚未設定基本資料，請先輸入「開始設定」。";
+  }
+
+  return (
+    "📋 長輩基本資料\n" +
+    "姓名：" + profile.name + "\n" +
+    "年齡：" + profile.age + "\n" +
+    "疾病：" + profile.disease + "\n" +
+    "藥物：" + profile.medicine + "\n" +
+    "家屬電話：" + profile.familyPhone
+  );
+}
+
+async function notifyFamily(message) {
+  if (!FAMILY_USER_ID) return;
+
+  await client.pushMessage(FAMILY_USER_ID, {
+    type: "text",
+    text: message
+  });
+}
 
 app.get("/", (req, res) => {
   res.send("LINE BOT RUNNING");

@@ -81,11 +81,40 @@ app.post("/webhook", line.middleware(config), async (req, res) => {
           "👨‍👩‍👧 聯絡家人\n" +
           "🆘 緊急求助";
       }
+let replyText = "";
 
-      await client.replyMessage(event.replyToken, {
-        type: "text",
-        text: replyText
-      });
+if (userText === "我已吃藥") {
+  replyText = "✅ 已記錄您今天的服藥時間";
+}
+
+else if (userText === "今日提醒") {
+  replyText = "📅 今天提醒：\n1. 早上吃藥\n2. 下午散步30分鐘";
+}
+
+else if (userText === "防詐騙") {
+  replyText = "🛡️ 防詐騙提醒：\n陌生來電要求匯款請立即掛斷。";
+}
+
+else if (userText === "我要叫車") {
+  replyText = "🚕 可撥打 55688 台灣大車隊";
+}
+
+else if (userText === "聯絡家人") {
+  replyText = "👨‍👩‍👧 已通知家人與您聯絡";
+}
+
+else if (userText === "緊急求助") {
+  replyText = "🚨 緊急求助已送出，請稍候。";
+}
+
+else {
+  replyText = "收到：" + userText;
+}
+
+await client.replyMessage(event.replyToken, {
+  type: "text",
+  text: replyText
+});
     }
 
     res.sendStatus(200);

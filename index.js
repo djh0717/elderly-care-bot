@@ -11,8 +11,8 @@ const config = {
 const client = new line.Client(config);
 
 const FAMILY_USER_ID = process.env.FAMILY_USER_ID;
+const GOOGLE_SCRIPT_URL = process.env.GOOGLE_SCRIPT_URL;
 
-// 暫時用記憶體儲存，之後可升級 Google Sheet / Firebase
 const users = {};
 
 app.post("/webhook", line.middleware(config), async (req, res) => {
@@ -31,7 +31,7 @@ app.post("/webhook", line.middleware(config), async (req, res) => {
         };
       }
 
-      let user = users[userId];
+      const user = users[userId];
       let replyText = "";
 
       if (text === "我是家屬") {
@@ -76,11 +76,9 @@ app.post("/webhook", line.middleware(config), async (req, res) => {
 
         replyText =
           "✅ 基本資料設定完成\n\n" +
-          "姓名：" + user.profile.name + "\n" +
-          "年齡：" + user.profile.age + "\n" +
-          "疾病：" + user.profile.disease + "\n" +
-          "藥物：" + user.profile.medicine + "\n" +
-          "家屬電話：" + user.profile.familyPhone;
+          getProfileText(user.profile);
+
+        await saveToGoogleSheet(userId, user.profile, "基本資料設定", "完成");
       }
 
       else if (text === "查看資料") {
@@ -88,11 +86,11 @@ app.post("/webhook", line.middleware(config), async (req, res) => {
       }
 
       else if (text === "我已吃藥") {
-        const now = new Date().toLocaleString("zh-TW", {
-          timeZone: "Asia/Taipei"
-        });
+        const now = getTaiwanTime();
 
         replyText = "✅ 已記錄您吃藥了\n時間：" + now;
+
+        await saveToGoogleSheet(userId, user.profile, "我已吃藥", now);
       }
 
       else if (text === "今日提醒" || text === "今天提醒") {
@@ -100,13 +98,14 @@ app.post("/webhook", line.middleware(config), async (req, res) => {
           "📅 今日提醒\n\n" +
           "💊 早上 08:00 吃藥\n" +
           "💊 中午 12:00 吃藥\n" +
-          "💊 晚上 18:00 吃藥";
+          "💊 晚上 18:00 吃藥\n\n" +
+          "吃完請按「我已吃藥」。";
       }
 
       else if (text === "防詐騙" || text === "防詐幫忙") {
         replyText =
           "🛡️ 防詐提醒\n\n" +
-          "陌生來電要求匯款、提供密碼、操作 ATM，請先不要做，先問家人。";
+          "陌生來電要求匯款、提供密碼、操作 ATM、點不明連結，請先不要做，先問家人。";
       }
 
       else if (text === "我要叫車") {
@@ -114,10 +113,14 @@ app.post("/webhook", line.middleware(config), async (req, res) => {
           "🚕 叫車資訊\n\n" +
           "台灣大車隊：55688\n" +
           "大都會車隊：55178";
+
+        await saveToGoogleSheet(userId, user.profile, "我要叫車", "顯示叫車資訊");
       }
 
       else if (text === "聯絡家人") {
         replyText = "👨‍👩‍👧 已通知家人，請稍候。";
+
+        await saveToGoogleSheet(userId, user.profile, "聯絡家人", "通知家屬");
 
         await notifyFamily(
           "👨‍👩‍👧 長輩想聯絡家人\n\n" +
@@ -129,6 +132,8 @@ app.post("/webhook", line.middleware(config), async (req, res) => {
         replyText =
           "🆘 緊急求助已送出！\n\n" +
           "請保持手機暢通，家人會盡快聯絡您。";
+
+        await saveToGoogleSheet(userId, user.profile, "緊急求助", "SOS");
 
         await notifyFamily(
           "🚨 緊急求助通知！\n\n" +
@@ -164,7 +169,7 @@ app.post("/webhook", line.middleware(config), async (req, res) => {
 });
 
 function getProfileText(profile) {
-  if (!profile.name) {
+  if (!profile || !profile.name) {
     return "尚未設定基本資料，請先輸入「開始設定」。";
   }
 
@@ -178,13 +183,50 @@ function getProfileText(profile) {
   );
 }
 
+function getTaiwanTime() {
+  return new Date().toLocaleString("zh-TW", {
+    timeZone: "Asia/Taipei"
+  });
+}
+
 async function notifyFamily(message) {
-  if (!FAMILY_USER_ID) return;
+  if (!FAMILY_USER_ID) {
+    console.log("FAMILY_USER_ID 尚未設定");
+    return;
+  }
 
   await client.pushMessage(FAMILY_USER_ID, {
     type: "text",
     text: message
   });
+}
+
+async function saveToGoogleSheet(userId, profile, action, note) {
+  if (!GOOGLE_SCRIPT_URL) {
+    console.log("GOOGLE_SCRIPT_URL 尚未設定");
+    return;
+  }
+
+  try {
+    await fetch(GOOGLE_SCRIPT_URL, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        userId: userId,
+        name: profile.name || "",
+        age: profile.age || "",
+        disease: profile.disease || "",
+        medicine: profile.medicine || "",
+        familyPhone: profile.familyPhone || "",
+        action: action,
+        note: note
+      })
+    });
+  } catch (error) {
+    console.error("寫入 Google Sheet 失敗：", error);
+  }
 }
 
 app.get("/", (req, res) => {

@@ -228,7 +228,29 @@ async function saveToGoogleSheet(userId, profile, action, note) {
     console.error("寫入 Google Sheet 失敗：", error);
   }
 }
+app.get("/check-medication", async (req, res) => {
+  try {
+    const response = await fetch(GOOGLE_SCRIPT_URL);
+    const data = await response.json();
 
+    for (const item of data) {
+      await notifyFamily(
+        "⚠️ 未確認服藥通知\n\n" +
+        "姓名：" + item.name + "\n" +
+        "年齡：" + item.age + "\n" +
+        "疾病：" + item.disease + "\n" +
+        "藥物：" + item.medicine + "\n" +
+        "預定服藥時間：08:00\n\n" +
+        "目前尚未收到服藥確認，請主動關心。"
+      );
+    }
+
+    res.send("checked");
+  } catch (error) {
+    console.error(error);
+    res.status(500).send("error");
+  }
+});
 app.get("/", (req, res) => {
   res.send("LINE BOT RUNNING");
 });

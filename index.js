@@ -244,6 +244,16 @@ app.get("/check-medication", async (req, res) => {
         "目前尚未收到服藥確認，請主動關心。"
       );
     }
+    await fetch(GOOGLE_SCRIPT_URL, {
+  method: "POST",
+  headers: {
+    "Content-Type": "application/json"
+  },
+  body: JSON.stringify({
+    mode: "markNotified",
+    rowNumber: item.rowNumber
+  })
+});
 
     res.send("checked");
   } catch (error) {

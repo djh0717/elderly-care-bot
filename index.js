@@ -122,7 +122,7 @@ app.post("/webhook", line.middleware(config), async (req, res) => {
 
         await saveToGoogleSheet(userId, user.profile, "聯絡家人", "通知家屬");
 
-        await notifyFamily(
+        await notifyFamily(user.profile.familyLineId || FAMILY_USER_ID,
           "👨‍👩‍👧 長輩想聯絡家人\n\n" +
           getProfileText(user.profile)
         );
@@ -135,7 +135,7 @@ app.post("/webhook", line.middleware(config), async (req, res) => {
 
         await saveToGoogleSheet(userId, user.profile, "緊急求助", "SOS");
 
-        await notifyFamily(
+      await notifyFamily(user.profile.familyLineId || FAMILY_USER_ID,
           "🚨 緊急求助通知！\n\n" +
           "長輩按下了「緊急求助」。\n\n" +
           getProfileText(user.profile)
@@ -240,7 +240,7 @@ console.log(text);
 const data = JSON.parse(text);
 
     for (const item of data) {
-      await notifyFamily(
+      await notifyFamily(item.familyLineId || FAMILY_USER_ID,
         "⚠️ 未確認服藥通知\n\n" +
         "姓名：" + item.name + "\n" +
         "年齡：" + item.age + "\n" +

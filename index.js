@@ -230,8 +230,14 @@ async function saveToGoogleSheet(userId, profile, action, note) {
 }
 app.get("/check-medication", async (req, res) => {
   try {
-    const response = await fetch(GOOGLE_SCRIPT_URL);
-    const data = await response.json();
+   const response = await fetch(GOOGLE_SCRIPT_URL);
+
+const text = await response.text();
+
+console.log("GOOGLE RESPONSE:");
+console.log(text);
+
+const data = JSON.parse(text);
 
     for (const item of data) {
       await notifyFamily(

@@ -81,9 +81,17 @@ app.post("/webhook", line.middleware(config), async (req, res) => {
         await saveToGoogleSheet(userId, user.profile, "基本資料設定", "完成");
       }
 
-      else if (text === "查看資料") {
-        replyText = getProfileText(user.profile);
-      }
+else if (text === "查看資料") {
+
+  const profile = await getProfileFromSheet(userId);
+
+  if (!profile) {
+    replyText = "尚未設定基本資料，請先輸入「開始設定」。";
+  } else {
+    replyText = getProfileText(profile);
+  }
+
+}
 
       else if (text === "我已吃藥") {
         const now = getTaiwanTime();
@@ -167,7 +175,17 @@ app.post("/webhook", line.middleware(config), async (req, res) => {
     res.sendStatus(500);
   }
 });
+async function getProfileFromSheet(userId) {
+  const url =
+    GOOGLE_SCRIPT_URL +
+    "?mode=getProfile&userId=" +
+    encodeURIComponent(userId);
 
+  const response = await fetch(url);
+  const data = await response.json();
+
+  return data;
+}
 function getProfileText(profile) {
   if (!profile || !profile.name) {
     return "尚未設定基本資料，請先輸入「開始設定」。";

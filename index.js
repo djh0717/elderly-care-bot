@@ -243,8 +243,7 @@ app.get("/check-medication", async (req, res) => {
         "預定服藥時間：08:00\n\n" +
         "目前尚未收到服藥確認，請主動關心。"
       );
-    }
-    await fetch(GOOGLE_SCRIPT_URL, {
+          await fetch(GOOGLE_SCRIPT_URL, {
   method: "POST",
   headers: {
     "Content-Type": "application/json"
@@ -254,6 +253,7 @@ app.get("/check-medication", async (req, res) => {
     rowNumber: item.rowNumber
   })
 });
+    }
 
     res.send("checked");
   } catch (error) {

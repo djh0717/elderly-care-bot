@@ -189,13 +189,13 @@ function getTaiwanTime() {
   });
 }
 
-async function notifyFamily(message) {
-  if (!FAMILY_USER_ID) {
-    console.log("FAMILY_USER_ID 尚未設定");
+async function notifyFamily(familyUserId, message) {
+  if (!familyUserId) {
+    console.log("家屬LINE_ID 未設定");
     return;
   }
 
-  await client.pushMessage(FAMILY_USER_ID, {
+  await client.pushMessage(familyUserId, {
     type: "text",
     text: message
   });
